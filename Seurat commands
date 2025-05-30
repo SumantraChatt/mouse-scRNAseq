@@ -1,0 +1,47 @@
+# Analysis from scratch
+ensdata <- Read10X(data.dir = "/directory/seurat_folder")
+ens1 <- CreateSeuratObject(counts = hgdata, project = "ens1")
+ens2 <- Read10X(data.dir = "/directory/seurat_folder")
+fgut <- CreateSeuratObject(counts = fgdata, project = "ens2")
+ens.merged <- merge(ens1, y = ens2, add.cell.ids = c("ens1", "ens2"), project = "ENS")
+
+View(ens.merged@meta.data)
+ens.mergedd$log10GenesPerUMI <- log10(ens.merged$nFeature_RNA) / log10(ens.merged$nCount_RNA)
+ens.merged$mitoRatio <- PercentageFeatureSet(object = ens.merged, pattern = "^mt-")
+ens.merged$mitoRatio <- ens.merged@meta.data$mitoRatio / 100
+metadata <- gut.merged@meta.data
+View(metadata)
+metadata$cells <- rownames(metadata)
+metadata <- metadata %>% dplyr::rename(seq_folder = orig.ident, nUMI = nCount_RNA, nGene = nFeature_RNA)
+
+#make a column with sample names
+metadata$sample <- NA
+metadata$sample[which(str_detect(metadata$cells, "ens1_"))] <- "ens1"
+metadata$sample[which(str_detect(metadata$cells, "ens1_"))] <- "ens1"
+
+# Filter out low quality reads using selected thresholds - these will change with experiment based on quality of cells
+filtered_ens <- subset(x = gut.merged, subset= (nUMI >= 500) & (nGene >= 250) & (log10GenesPerUMI > 0.80) & (mitoRatio < 0.20))
+
+#Gene level Filtering
+#remove genes that have zero expression in all cells. Additionally, we will perform some filtering by prevalence. If a gene is only expressed in a handful of cells, it is not particularly meaningful as it still brings down the averages for all other cells it is not expressed in. 
+#For our data we choose to keep only genes which are expressed in 10 or more cells.
+
+# Output a logical vector for every gene on whether the more than zero counts per cell
+# Extract counts
+counts <- GetAssayData(object = filtered_ens, slot = "counts")
+
+# Output a logical vector for every gene on whether the more than zero counts per cell
+nonzero <- counts > 0
+
+# Sums all TRUE values and returns TRUE if more than 10 TRUE values per gene
+keep_genes <- Matrix::rowSums(nonzero) >= 10
+
+# Only keeping those genes expressed in more than 10 cells
+filtered_counts <- counts[keep_genes, ]
+
+# Reassign to filtered Seurat object
+filtered_seurat_ens <- CreateSeuratObject(filtered_counts, meta.data = filtered_seurat_ens@meta.data)
+
+#Save file
+saveRDS(filtered_seurat_ens, file="/directory/filtered_seurat_ens.rds")
+
